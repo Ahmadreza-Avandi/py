@@ -22,13 +22,13 @@ sudo apt-get install -y \
 mkdir -p ../trainer ../assets ../logs
 chmod 775 ../trainer ../assets ../logs
 
-# نصب وابستگی‌های پایتون با بهینه‌سازی برای ARM
+# نصب وابستگی‌های پایتون با بهینه‌سازی برای ARM (نسخه‌های به‌روزتر)
 pip3 install --no-cache-dir --break-system-packages \
-    numpy==1.23.5 \
-    opencv-contrib-python-headless==4.8.0.76 \
-    imutils==0.5.4 \
-    pyzmq==25.1.2 \
-    protobuf==3.20.3
+    numpy==1.26.4 \
+    opencv-contrib-python-headless==4.9.0.80 \
+    imutils==1.0.9 \
+    pyzmq==26.0.2 \
+    protobuf==5.26.1
 
 # تنظیم مجوزهای پیشرفته
 sudo usermod -a -G video,gpio,i2c $USER
