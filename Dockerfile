@@ -2,8 +2,8 @@
 FROM python:3.9-slim
 
 # تنظیم میرور برای pip جهت دور زدن تحریم‌ها و آپگرید pip
-RUN pip config set global.index-url https://pypi.sharif.edu/simple/ && \
-    pip install --upgrade pip
+RUN pip install --upgrade pip && \
+    pip config set global.index-url https://pypi.org/simple/
 
 # نصب پیش‌نیازهای سیستمی برای OpenCV، FFmpeg و دسترسی به دوربین
 RUN apt-get update && \
@@ -38,20 +38,20 @@ COPY deploy /app/deploy
 RUN mkdir -p /app/trainer /app/logs && \
     chmod 775 /app/trainer /app/assets /app/logs
 
-# نصب پکیج‌های پایتون
-RUN pip install --no-cache-dir -r requirements.txt && \
-    pip install --no-cache-dir persiantools
+# نصب پکیج‌های پایتون با استفاده از میرور رسمی و تلاش مجدد در صورت شکست
+RUN pip install --no-cache-dir --retries 5 -r requirements.txt
 
-# متغیرهای محیطی پیش‌فرض
+# متغیرهای محیطی پیش‌فرض (بدون اطلاعات حساس)
 ENV MYSQL_HOST=91.107.165.2 \
     MYSQL_DATABASE=mydatabase \
     MYSQL_USER=user \
-    MYSQL_PASSWORD=userpassword \
     REDIS_HOST=91.107.165.2 \
     REDIS_PORT=6379 \
-    REDIS_PASSWORD= \
     LOG_LEVEL=INFO \
     PYTHONUNBUFFERED=1
+
+# نکته: رمزهای عبور باید در زمان اجرا با استفاده از متغیرهای محیطی یا فایل‌های محرمانه تنظیم شوند
+# مثال: docker run -e MYSQL_PASSWORD=your_password -e REDIS_PASSWORD=your_redis_password ...
 
 # اکسپوز کردن پورت
 EXPOSE 8080

@@ -1,0 +1,24 @@
+version: '3'
+
+services:
+  face-attendance:
+    build: .
+    container_name: face-attendance
+    environment:
+      - MYSQL_HOST=91.107.165.2
+      - MYSQL_DATABASE=mydatabase
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=your_password
+      - REDIS_HOST=91.107.165.2
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=your_redis_password
+      - LOG_LEVEL=INFO
+      - PYTHONUNBUFFERED=1
+    devices:
+      - /dev/video0:/dev/video0
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./logs:/app/logs
+      - ./trainer:/app/trainer
+    restart: unless-stopped
