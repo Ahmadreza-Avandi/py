@@ -1,3 +1,10 @@
+deb http://mirror.init7.net/debian/ bullseye main contrib non-free
+deb http://mirror.init7.net/debian-security/ bullseye-security main
+deb http://mirror.init7.net/debian/ bullseye-updates main
+
+----------------------------------------------------
+
+
 sudo apt-get install ca-certificates curl
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsSL https://download.docker.com/linux/raspbian/gpg -o /etc/apt/keyrings/docker.asc
