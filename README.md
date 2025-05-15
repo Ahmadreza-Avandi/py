@@ -1,3 +1,22 @@
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/raspbian/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/raspbian \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update 
+
+
+----------------------------------------------- 
+
+sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+
+
 سیستم حضور و غیاب با تشخیص چهره روی Raspberry Pi
 به این پروژه خوش اومدی! اینجا قراره یه سیستم حضور و غیاب باحال با تشخیص چهره رو روی Raspberry Pi راه‌اندازی کنیم. با داکر کار رو ساده‌تر کردیم و برای دور زدن تحریم‌ها هم از میرورهای ایرانی استفاده می‌کنیم. این راهنما از صفر تا صد همراهته—فقط کافیه قدم‌به‌قدم پیش بری!
 
