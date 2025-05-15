@@ -1,3 +1,6 @@
+curl -sSL https://get.docker.com | sed 's/download.docker.com/mirrors.aliyun.com\/docker-ce/g' | sh
+
+
 deb http://mirror.init7.net/debian/ bullseye main contrib non-free
 deb http://mirror.init7.net/debian-security/ bullseye-security main
 deb http://mirror.init7.net/debian/ bullseye-updates main
