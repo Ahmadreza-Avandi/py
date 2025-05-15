@@ -5,19 +5,20 @@ services:
     build: .
     container_name: face-attendance
     environment:
-      - MYSQL_HOST=91.107.165.2
-      - MYSQL_DATABASE=mydatabase
-      - MYSQL_USER=user
-      - MYSQL_PASSWORD=your_password
-      - REDIS_HOST=91.107.165.2
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=your_redis_password
-      - LOG_LEVEL=INFO
+      - MYSQL_HOST=${MYSQL_HOST:-91.107.165.2}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-mydatabase}
+      - MYSQL_USER=${MYSQL_USER:-user}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-your_password}
+      - REDIS_HOST=${REDIS_HOST:-91.107.165.2}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-your_redis_password}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - PYTHONUNBUFFERED=1
+      - USE_CAMERA=${USE_CAMERA:-false}
     devices:
-      - /dev/video0:/dev/video0
+      - ${CAMERA_DEVICE:-/dev/video0}:${CAMERA_DEVICE:-/dev/video0}
     ports:
-      - "8080:8080"
+      - "${PORT:-8080}:8080"
     volumes:
       - ./logs:/app/logs
       - ./trainer:/app/trainer
