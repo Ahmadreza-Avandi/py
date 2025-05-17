@@ -1,38 +1,44 @@
 #!/bin/bash
 
-# رنگ‌ها برای خوانایی بیشتر
-GREEN="\e[32m"
-RED="\e[31m"
-RESET="\e[0m"
+# remove realvnc-vnc-server completely
+sudo pkill -f vnc
+sudo killall vncserver-x11 2>/dev/null || true
+sudo killall vncserver-virtual 2>/dev/null || true
+sudo killall vncserverui 2>/dev/null || true
 
-echo -e "${GREEN}[*] شروع عملیات بازگردانی سورس‌لیست و حل مشکل GPG...${RESET}"
+sudo dpkg --remove --force-remove-reinstreq realvnc-vnc-server || true
+sudo apt purge -y realvnc-vnc-server || true
 
-# اضافه کردن کلید GPG برای Docker
-echo -e "${GREEN}[*] اضافه کردن کلید GPG برای Docker...${RESET}"
-curl -fsSL https://download.docker.com/linux/raspbian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+# fix any broken installs
+sudo dpkg --configure -a
+sudo apt --fix-broken install -y
 
-# ساخت فایل سورس لیست امن برای Docker
-echo -e "${GREEN}[*] ساخت سورس Docker با استفاده از Keyring...${RESET}"
-echo "deb [arch=armhf signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/raspbian bookworm stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# تنظیم مجدد سورس لیست پیش‌فرض رزبری‌پای (Bookworm)
-echo -e "${GREEN}[*] تنظیم مجدد سورس‌لیست پیش‌فرض...${RESET}"
-sudo tee /etc/apt/sources.list > /dev/null <<EOF
-deb http://raspbian.raspberrypi.org/raspbian/ bookworm main contrib non-free rpi
-EOF
-
-sudo tee /etc/apt/sources.list.d/raspi.list > /dev/null <<EOF
-deb http://archive.raspberrypi.org/debian/ bookworm main
-EOF
-
-# آپدیت لیست پکیج‌ها
-echo -e "${GREEN}[*] اجرای apt update...${RESET}"
+# update package list before installing build tools
 sudo apt update
 
-# آپگرید سیستم
-echo -e "${GREEN}[*] اجرای apt upgrade...${RESET}"
-sudo apt upgrade -y
+# install build dependencies for Python
+sudo apt install -y make build-essential libssl-dev zlib1g-dev \
+    libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
+    libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
 
-echo -e "${GREEN}[✔] همه چیز با موفقیت انجام شد! ریبوت اختیاری هست، ولی بهتره بزنی:${RESET}"
-echo -e "${GREEN}sudo reboot${RESET}"
+# set desired Python version
+PYTHON_VERSION=3.12.3
+
+# download and build Python from source
+cd /usr/src
+sudo wget https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz
+sudo tar xzf Python-${PYTHON_VERSION}.tgz
+cd Python-${PYTHON_VERSION}
+sudo ./configure --enable-optimizations
+sudo make -j$(nproc)
+sudo make altinstall
+
+# ensure pip for new Python
+sudo /usr/local/bin/python${PYTHON_VERSION%.*} -m ensurepip
+
+# set new python3 as alternative
+sudo update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python${PYTHON_VERSION%.*} 1
+
+# final versions
+echo "installed: $(python${PYTHON_VERSION%.*} --version)"
 
