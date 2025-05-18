@@ -1,50 +1,33 @@
 #!/bin/bash
 
-# Step 1: Add the public key for Raspberry Pi repositories
-echo "Adding public key for Raspberry Pi repositories..."
-sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 9165938D90FDDD2E
+# Step 1: Backup the current sources.list file
+sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
 
-# Step 2: Update the package list
-echo "Updating package list..."
+# Step 2: Set the standard sources.list for Raspberry Pi OS Bookworm
+sudo bash -c 'echo "deb http://raspbian.raspberrypi.org/raspbian bookworm main contrib non-free rpi" > /etc/apt/sources.list'
+sudo bash -c 'echo "deb http://archive.raspberrypi.org/debian bookworm main" >> /etc/apt/sources.list'
+
+# Step 3: Remove any Docker repository files (if present) to avoid conflicts
+sudo rm /etc/apt/sources.list.d/docker.list 2>/dev/null || true
+
+# Step 4: Update apt to ensure repositories are correctly configured
 sudo apt update
 
-# Step 3: Install tzdata if not already installed
-if ! dpkg -l | grep -q tzdata; then
-    echo "Installing tzdata..."
-    sudo apt install tzdata -y
-    if [ $? -ne 0 ]; then
-        echo "Failed to install tzdata. Please check your repositories and try again."
-        exit 1
-    fi
-else
-    echo "tzdata is already installed."
-fi
+# Step 5: Upgrade all installed packages to their latest versions
+sudo apt upgrade -y
 
-# Step 4: Set the timezone
-echo "Setting timezone to Asia/Tehran..."
-sudo timedatectl set-timezone Asia/Tehran
-if [ $? -eq 0 ]; then
-    echo "Timezone set to Asia/Tehran successfully."
-else
-    echo "Failed to set timezone. Make sure tzdata is installed and try again."
-    exit 1
-fi
+# Step 6: Install necessary apt packages (Redis server and QtWayland)
+sudo apt install -y redis-server qtwayland5
 
-# Step 5: Ensure systemd-timesyncd is enabled and running
-echo "Enabling and starting systemd-timesyncd..."
-sudo systemctl enable systemd-timesyncd
-sudo systemctl start systemd-timesyncd
-if [ $? -eq 0 ]; then
-    echo "systemd-timesyncd is enabled and running. System time should be synchronized with NTP."
-else
-    echo "Failed to start systemd-timesyncd. Please check your internet connection."
-    exit 1
-fi
+# Step 7: Start and enable Redis server to ensure it's running
+sudo systemctl start redis-server
+sudo systemctl enable redis-server
 
-# Step 6: Verify the settings
-echo "Current timezone: $(timedatectl show --property=Timezone --value)"
-echo "Current time: $(date)"
+# Step 8: Activate the virtual environment (assuming it's located in ~/Desktop/py/venv)
+source ~/Desktop/py/venv/bin/activate
 
-# final versions
-echo "installed: $(python${PYTHON_VERSION%.*} --version)"
+# Step 9: Upgrade pip to ensure you have the latest version
+pip install --upgrade pip
 
+# Step 10: Install the correct pip packages (OpenCV with contrib and Redis)
+pip install opencv-contrib-python redis
