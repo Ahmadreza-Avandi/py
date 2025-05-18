@@ -1,21 +1,24 @@
 #!/bin/bash
 
-# اسکریپت راه‌اندازی سیستم تشخیص چهره با داکر
+# Step 1: Enable camera interface
+echo "Enabling camera interface..."
+sudo raspi-config nonint do_camera 0
 
-# بررسی وجود دوربین
-if [ -e /dev/video0 ]; then
-    echo "دوربین یافت شد: /dev/video0"
-    USE_CAMERA=true
-    CAMERA_DEVICE=/dev/video0
-else
-    echo "دوربین یافت نشد. سیستم بدون دوربین اجرا خواهد شد."
-    USE_CAMERA=false
-    CAMERA_DEVICE=/dev/video0
-fi
+# Step 2: Update and upgrade the system
+sudo apt update
+sudo apt upgrade -y
 
-# اجرای داکر کامپوز با متغیرهای محیطی مناسب
-USE_CAMERA=$USE_CAMERA CAMERA_DEVICE=$CAMERA_DEVICE docker-compose up -d
+# Step 3: Install additional dependencies for camera support
+sudo apt install -y libatlas-base-dev libjasper-dev libqtgui4 libqt4-test
 
-echo "سیستم تشخیص چهره با موفقیت راه‌اندازی شد."
-echo "برای مشاهده لاگ‌ها، دستور زیر را اجرا کنید:"
-echo "docker-compose logs -f"
+# Step 4: Reinstall OpenCV with camera support
+source ~/Desktop/py/venv/bin/activate
+pip uninstall -y opencv-contrib-python
+pip install opencv-contrib-python
+
+# Step 5: Test camera connection
+echo "Testing camera connection..."
+python3 -c "import cv2; cap = cv2.VideoCapture(0); print('Camera opened successfully' if cap.isOpened() else 'Camera failed to open')"
+
+# Step 6: Deactivate the virtual environment
+deactivate
