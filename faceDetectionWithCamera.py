@@ -9,8 +9,10 @@ from datetime import datetime
 from persiantools.jdatetime import JalaliDateTime
 import schedule
 import logging
-import json
 import os
+import logging.handlers
+import json
+import base64
 
 # تنظیمات لاگینگ
 logging.basicConfig(
@@ -29,6 +31,8 @@ class CameraManager:
         self.window_name = "Face Recognition System"
         self.last_click = 0
         self.click_delay = 500   # میلی‌ثانیه
+        self.frame_counter = 0   # شمارنده فریم برای پردازش متناوب
+        self.process_interval = 5  # پردازش چهره هر 5 فریم یکبار
 
         # دیکشنری روزهای هفته فارسی
         self.persian_days = {
@@ -40,75 +44,78 @@ class CameraManager:
             5: "پنج‌شنبه",
             6: "جمعه"
         }
-        
-        # بارگذاری نگاشت برچسب‌ها
-        self.label_to_national = {}
-        self.load_label_mapping()
+
+        # اتصال به دیتابیس MySQL با استفاده از متغیرهای محیطی
+        try:
+            self.db = mysql.connector.connect(
+                host=os.environ.get('MYSQL_HOST', '89.34.230.199'),
+                database=os.environ.get('MYSQL_DATABASE', 'mydatabase'),
+                user=os.environ.get('MYSQL_USER', 'user'),
+                password=os.environ.get('MYSQL_PASSWORD', 'userpassword')
+            )
+            logger.info("اتصال به دیتابیس MySQL در %s برقرار شد", os.environ.get('MYSQL_HOST'))
+        except mysql.connector.Error as err:
+            logger.error("خطا در اتصال به دیتابیس: %s", err)
+            self.db = None
+
+        # اتصال به Redis با تنظیمات سرور مرکزی
+        try:
+            self.redis_db = redis.StrictRedis(
+                host=os.environ.get('REDIS_HOST', '89.34.230.199'),
+                port=int(os.environ.get('REDIS_PORT', 6379)),
+                db=0,
+                password=os.environ.get('REDIS_PASSWORD', ''),
+                decode_responses=True,
+                socket_connect_timeout=10,
+                retry_on_timeout=True,
+                socket_keepalive=True
+            )
+            if self.redis_db.ping():
+                logger.info("اتصال به Redis در %s برقرار شد", os.environ.get('REDIS_HOST'))
+        except Exception as e:
+            logger.error("خطا در اتصال به Redis: %s", e)
+            self.redis_db = None
 
         # بارگذاری Haar Cascade جهت تشخیص چهره
         self.face_cascade = cv2.CascadeClassifier(
             cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
         )
 
-        # بارگذاری مدل تشخیص چهره – استفاده از LBPH
+        # بارگذاری و آموزش مدل تشخیص چهره
         try:
             if not hasattr(cv2, 'face'):
                 raise AttributeError("ماژول cv2.face موجود نیست. لطفاً opencv-contrib-python را نصب کنید.")
+            
             self.face_recognizer = cv2.face.LBPHFaceRecognizer_create()
             model_path = "trainer/model.xml"
-            self.face_recognizer.read(model_path)
-            logger.info("مدل تشخیص چهره از %s بارگذاری شد.", model_path)
+            
+            # آموزش مدل از داده‌های ردیس در صورت وجود
+            if os.path.exists(model_path):
+                self.face_recognizer.read(model_path)
+                logger.info("مدل از فایل %s بارگذاری شد", model_path)
+            elif self.redis_db and self.redis_db.ping():
+                self.train_model_from_redis()
+            else:
+                logger.warning("هیچ مدل یا داده آموزشی یافت نشد")
+            
         except Exception as e:
-            logger.error("خطا در بارگذاری مدل تشخیص چهره: %s", e)
+            logger.error("خطا در مقداردهی مدل: %s", e)
             self.face_recognizer = None
 
-        # اتصال به دیتابیس MySQL (پایگاه داده: test)
-        try:
-            self.db = mysql.connector.connect(
-                host='localhost',
-                database='proj',
-                user='root',
-                password=''
-            )
-            logger.info("اتصال به دیتابیس MySQL برقرار شد.")
-        except mysql.connector.Error as err:
-            logger.error("خطا در اتصال به دیتابیس: %s", err)
-            self.db = None
-
-        # اتصال به Redis (اختیاری)
-        try:
-            self.redis_db = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
-            logger.info("اتصال به Redis برقرار شد.")
-        except Exception as e:
-            logger.error("خطا در اتصال به Redis: %s", e)
-            self.redis_db = None
+        # تنظیمات پیشرفته لاگ‌گیری
+        log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+        logger.setLevel(log_level)
+        file_handler = logging.handlers.RotatingFileHandler(
+            'attendance.log',
+            maxBytes=1024*1024*5,
+            backupCount=3,
+            encoding='utf-8'
+        )
+        file_handler.setFormatter(logging.Formatter('[%(asctime)s] %(levelname)s: %(message)s'))
+        logger.addHandler(file_handler)
 
         # دیکشنری جهت جلوگیری از ثبت مکرر حضور (به مدت 2 ساعت)
         self.last_checkin = {}
-
-    def load_label_mapping(self):
-        """
-        بارگذاری فایل نگاشت برچسب‌ها به کد ملی
-        """
-        try:
-            # بارگذاری نگاشت اصلی (کد ملی به برچسب)
-            mapping_path = os.path.join("labels", "label_mapping.json")
-            if os.path.exists(mapping_path):
-                with open(mapping_path, 'r', encoding='utf-8') as f:
-                    national_to_label = json.load(f)
-                # ایجاد نگاشت معکوس (برچسب به کد ملی)
-                self.label_to_national = {str(v): k for k, v in national_to_label.items()}
-                logger.info("نگاشت برچسب‌ها از %s بارگذاری شد.", mapping_path)
-            else:
-                # بارگذاری فایل labels_to_name قدیمی به عنوان پشتیبان
-                labels_path = os.path.join("labels", "labels_to_name.json")
-                if os.path.exists(labels_path):
-                    with open(labels_path, 'r', encoding='utf-8') as f:
-                        labels_data = json.load(f)
-                    self.label_to_national = {k: v.get("nationalCode") for k, v in labels_data.items()}
-                    logger.info("نگاشت برچسب‌ها از %s بارگذاری شد.", labels_path)
-        except Exception as e:
-            logger.error("خطا در بارگذاری نگاشت برچسب‌ها: %s", e)
 
     def add_camera(self, name, source, location):
         """
@@ -147,46 +154,62 @@ class CameraManager:
     def process_faces(self, frame, location):
         """
         پردازش فریم:
+          - کاهش رزولوشن برای بهبود عملکرد.
           - تبدیل به تصویر خاکستری.
           - تشخیص چهره‌ها.
           - در صورت کوچک بودن چهره (به علت فاصله از لنز) تصویر چهره بزرگ‌نمایی می‌شود.
           - پیش‌بینی برچسب با استفاده از مدل آموزش‌دیده.
           - ثبت حضور در صورت تشخیص با اطمینان کافی.
         """
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # کاهش رزولوشن برای بهبود عملکرد
+        frame_small = cv2.resize(frame, (320, 240))
+        gray = cv2.cvtColor(frame_small, cv2.COLOR_BGR2GRAY)
+        
         # استفاده از minSize کوچکتر جهت تشخیص چهره‌های دور
-        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.3, minNeighbors=5, minSize=(20, 20))
+        faces = self.face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(20, 20))
+        
+        # ضریب مقیاس برای تبدیل مختصات به فریم اصلی
+        scale_factor_x = frame.shape[1] / frame_small.shape[1]
+        scale_factor_y = frame.shape[0] / frame_small.shape[0]
+        
         for (x, y, w, h) in faces:
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
-            face_roi = gray[y:y+h, x:x+w]
+            # تبدیل مختصات به فریم اصلی
+            x_orig = int(x * scale_factor_x)
+            y_orig = int(y * scale_factor_y)
+            w_orig = int(w * scale_factor_x)
+            h_orig = int(h * scale_factor_y)
+            
+            cv2.rectangle(frame, (x_orig, y_orig), (x_orig+w_orig, y_orig+h_orig), (0, 255, 0), 2)
+            
+            # استخراج ناحیه چهره از تصویر اصلی برای دقت بیشتر در تشخیص
+            face_roi = cv2.cvtColor(frame[y_orig:y_orig+h_orig, x_orig:x_orig+w_orig], cv2.COLOR_BGR2GRAY)
 
             # اگر چهره کوچک باشد، بزرگ‌نمایی می‌شود
-            if w < 100 or h < 100:
+            if w_orig < 100 or h_orig < 100:
                 try:
-                    face_roi = cv2.resize(face_roi, (w*2, h*2), interpolation=cv2.INTER_CUBIC)
+                    face_roi = cv2.resize(face_roi, (100, 100), interpolation=cv2.INTER_AREA)
                 except Exception as e:
                     logger.error("خطا در بزرگنمایی تصویر چهره: %s", e)
 
             if self.face_recognizer is not None:
                 try:
-                    label, confidence = self.face_recognizer.predict(face_roi)
-                    # تنظیم آستانه دقت (مثلاً confidence کمتر از 100)
-                    if confidence < 100:
-                        # استفاده از نگاشت برچسب به کد ملی
-                        label_str = str(label)
-                        if label_str in self.label_to_national:
-                            national_code = self.label_to_national[label_str]
-                            logger.info(f"چهره شناسایی شد: برچسب {label} مربوط به کد ملی {national_code}")
+                    # استاندارد کردن اندازه تصویر چهره برای تشخیص
+                    face_roi_std = cv2.resize(face_roi, (200, 200), interpolation=cv2.INTER_AREA)
+                    label, confidence = self.face_recognizer.predict(face_roi_std)
+                    
+                    # تنظیم آستانه دقت
+                    if confidence < 85:
+                        national_code = str(label)
+                        # استفاده از دیکشنری last_checkin برای جلوگیری از ثبت مکرر
+                        if national_code not in self.last_checkin:
                             self.log_attendance(national_code, location)
-                        else:
-                            # اگر در نگاشت نبود، از روش قدیمی استفاده کنیم
-                            national_code = str(abs(label))
-                            logger.info(f"چهره با برچسب {label} در نگاشت یافت نشد. استفاده از روش جایگزین: {national_code}")
-                            self.log_attendance(national_code, location)
+                            self.last_checkin[national_code] = datetime.now()
                     else:
                         logger.debug("چهره با دقت کافی شناسایی نشد (confidence: %s).", confidence)
                 except Exception as e:
                     logger.error("خطا در پیش‌بینی چهره: %s", e)
+        
+        # تغییر اندازه فریم نهایی برای نمایش
         return cv2.resize(frame, (640, 480))
 
     def log_attendance(self, national_code, location):
@@ -203,8 +226,8 @@ class CameraManager:
                 # دریافت اطلاعات کاربر و کلاس
                 cursor.execute("""
                     SELECT u.fullName, u.classId, c.name as className 
-                    FROM user u 
-                    LEFT JOIN class c ON u.classId = c.id 
+                    FROM User u 
+                    LEFT JOIN Class c ON u.classId = c.id 
                     WHERE u.nationalCode = %s
                 """, (national_code,))
                 
@@ -283,6 +306,45 @@ class CameraManager:
             logger.error(f"خطای دیتابیس: {err}")
             self.db.rollback()
 
+    def train_model_from_redis(self):
+        """آموزش مدل از داده‌های ذخیره شده در ردیس"""
+        try:
+            labels = []
+            faces = []
+            
+            # جمع‌آوری کلیدهای کاربران از ردیس
+            keys = self.redis_db.keys('*')
+            if not keys:
+                logger.warning("هیچ داده آموزشی در ردیس وجود ندارد")
+                return
+                
+            for key in keys:
+                data = json.loads(self.redis_db.get(key))
+                img_bytes = base64.b64decode(data['faceImage'])
+                np_arr = np.frombuffer(img_bytes, np.uint8)
+                img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
+                
+                # تغییر سایز تصویر برای بهینه‌سازی حافظه
+                img = cv2.resize(img, (200, 200), interpolation=cv2.INTER_AREA)
+                
+                faces.append(img)
+                labels.append(int(data['nationalCode']))
+            
+            # آموزش مدل و ذخیره
+            self.face_recognizer.train(faces, np.array(labels))
+            
+            # ایجاد پوشه trainer اگر وجود ندارد
+            os.makedirs("trainer", exist_ok=True)
+            self.face_recognizer.save("trainer/model.xml")
+            logger.info("مدل با %d تصویر از ردیس آموزش داده شد", len(faces))
+            
+            # بهینه‌سازی برای رزبری پای
+            cv2.ocl.setUseOpenCL(False)  # غیرفعال کردن OpenCL برای سازگاری بهتر
+            
+        except Exception as e:
+            logger.error("خطا در آموزش مدل: %s", e)
+            raise
+
     def update_last_seen(self, national_code, full_name, timestamp, location):
         """به‌روزرسانی آخرین وضعیت مشاهده کاربر"""
         try:
@@ -314,15 +376,28 @@ class CameraManager:
         به‌روز رسانی فریم‌های هر دوربین:
           - دریافت فریم از دوربین.
           - اعمال تنظیم فاصله کانونی برای دوربین‌های خارجی.
-          - پردازش فریم جهت تشخیص چهره.
+          - پردازش فریم جهت تشخیص چهره (فقط هر چند فریم یکبار).
           - در صورت عدم دریافت فریم، استفاده از یک فریم سیاه.
         """
+        # افزایش شمارنده فریم
+        self.frame_counter += 1
+        
+        # تعیین اینکه آیا در این فریم باید پردازش چهره انجام شود یا خیر
+        process_face_this_frame = (self.frame_counter % self.process_interval == 0)
+        
         for cam in self.cameras:
             ret, frame = cam['cap'].read()
             if ret:
+                # تنظیم فاصله کانونی برای دوربین‌های خارجی
                 if cam.get('is_external', False):
                     frame = self.adjust_focal_distance(frame, zoom_factor=1.5)
-                cam['frame'] = self.process_faces(frame, cam['location'])
+                
+                # پردازش چهره فقط در فریم‌های مشخص
+                if process_face_this_frame:
+                    cam['frame'] = self.process_faces(frame, cam['location'])
+                else:
+                    # در فریم‌های دیگر فقط تغییر اندازه بدون پردازش چهره
+                    cam['frame'] = cv2.resize(frame, (640, 480))
             else:
                 cam['frame'] = np.zeros((480, 640, 3), dtype=np.uint8)
 
