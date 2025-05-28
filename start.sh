@@ -1,51 +1,38 @@
 #!/bin/bash
 
-# اسکریپت برای رفع مشکل Wayland و Qt روی Raspberry Pi
+set -e  # اگه یه جا خطا داد، اسکریپت متوقف شه
 
-# به‌روزرسانی مخازن
-echo "به‌روزرسانی مخازن سیستم..."
-sudo apt update
+echo "🔁 Updating system packages..."
+sudo apt update && sudo apt upgrade -y
 
-# نصب پکیج‌های لازم برای Wayland و Qt
-echo "نصب پکیج‌های لازم برای Wayland و Qt..."
-sudo apt install -y \
-    qtwayland5 \
-    libqt5waylandclient5 \
-    libqt5waylandcompositor5 \
-    qt5-default \
-    libqt5widgets5 \
-    libqt5gui5 \
-    qtbase5-dev \
-    qt5-qmake
+echo "📦 Installing required build tools for Python compilation..."
+sudo apt install -y make build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
+libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
 
-# آپدیت PyQt5 برای سازگاری با Wayland
-echo "به‌روزرسانی PyQt5..."
-pip3 install --upgrade pyqt5
+PYTHON_VERSION="3.12.3"
 
-# تنظیم متغیر محیطی برای Qt
-echo "تنظیم متغیر محیطی برای استفاده از Wayland..."
-if ! grep -q "QT_QPA_PLATFORM=wayland" ~/.bashrc; then
-    echo 'export QT_QPA_PLATFORM=wayland' >> ~/.bashrc
-fi
-source ~/.bashrc
+echo "⬇️ Downloading Python $PYTHON_VERSION..."
+cd /tmp
+wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz
+tar -xf Python-$PYTHON_VERSION.tgz
+cd Python-$PYTHON_VERSION
 
-# بررسی وضعیت Wayland
-echo "بررسی وضعیت Wayland..."
-if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-    echo "سیستم روی Wayland کار می‌کنه."
-else
-    echo "هشدار: سیستم روی Wayland نیست. تلاش برای تغییر به X11..."
-    # تغییر به X11 در صورت نیاز
-    if [ -f /etc/xdg/lxsession/LXDE-pi/desktop.conf ]; then
-        sudo sed -i 's/session=wayland/session=x11/' /etc/xdg/lxsession/LXDE-pi/desktop.conf
-        echo "تنظیمات به X11 تغییر کرد. لطفاً سیستم رو ریبوت کنید."
-    else
-        echo "فایل تنظیمات یافت نشد. لطفاً به صورت دستی بررسی کنید."
-    fi
-fi
+echo "⚙️ Configuring and building Python..."
+./configure --enable-optimizations
+make -j$(nproc)
 
-# پیام نهایی
-echo "تنظیمات کامل شد. لطفاً برنامه رو با این دستور اجرا کنید:"
-echo "python3 faceDetectionWithCamera.py"
-echo "اگر هنوز مشکل دارید، سیستم رو با این دستور ریبوت کنید:"
-echo "sudo reboot"
+echo "🚀 Installing Python $PYTHON_VERSION (altinstall)..."
+sudo make altinstall
+
+echo "🐍 Switching to new Python..."
+PYTHON_BIN="python3.12"
+$PYTHON_BIN --version
+
+echo "📦 Installing Python dependencies..."
+$PYTHON_BIN -m pip install --upgrade pip
+$PYTHON_BIN -m pip install -r requirements.txt
+
+echo "🚀 Starting the project: faceDetectionWithCamera.py"
+$PYTHON_BIN faceDetectionWithCamera.py
+
