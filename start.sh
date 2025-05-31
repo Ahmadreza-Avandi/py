@@ -1,38 +1,42 @@
 #!/bin/bash
 
-set -e  # اگه یه جا خطا داد، اسکریپت متوقف شه
+#!/bin/bash
 
-echo "🔁 Updating system packages..."
+# به‌روزرسانی سیستم
+echo "به‌روزرسانی سیستم..."
 sudo apt update && sudo apt upgrade -y
 
-echo "📦 Installing required build tools for Python compilation..."
-sudo apt install -y make build-essential libssl-dev zlib1g-dev \
-libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
-libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+# نصب پیش‌نیازها
+echo "نصب پیش‌نیازها..."
+sudo apt install -y build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev curl libbz2-dev wget
 
-PYTHON_VERSION="3.12.3"
+# دانلود آخرین نسخه پایتون (مثلاً 3.11.6، نسخه را بررسی کنید)
+PYTHON_VERSION=3.11.6
+echo "دانلود پایتون $PYTHON_VERSION..."
+wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz
 
-echo "⬇️ Downloading Python $PYTHON_VERSION..."
-cd /tmp
-wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz
-tar -xf Python-$PYTHON_VERSION.tgz
+# استخراج فایل
+echo "استخراج فایل..."
+tar -xvf Python-$PYTHON_VERSION.tar.xz
+
+# ورود به دایرکتوری
 cd Python-$PYTHON_VERSION
 
-echo "⚙️ Configuring and building Python..."
+# پیکربندی و کامپایل
+echo "پیکربندی و کامپایل پایتون..."
 ./configure --enable-optimizations
 make -j$(nproc)
 
-echo "🚀 Installing Python $PYTHON_VERSION (altinstall)..."
+# نصب پایتون
+echo "نصب پایتون..."
 sudo make altinstall
 
-echo "🐍 Switching to new Python..."
-PYTHON_BIN="python3.12"
-$PYTHON_BIN --version
+# پاکسازی
+cd ..
+rm -rf Python-$PYTHON_VERSION Python-$PYTHON_VERSION.tar.xz
 
-echo "📦 Installing Python dependencies..."
-$PYTHON_BIN -m pip install --upgrade pip
-$PYTHON_BIN -m pip install -r requirements.txt
+# بررسی نسخه نصب‌شده
+echo "نسخه پایتون نصب‌شده:"
+python3.11 --version
 
-echo "🚀 Starting the project: faceDetectionWithCamera.py"
-$PYTHON_BIN faceDetectionWithCamera.py
-
+echo "نصب با موفقیت انجام شد!"
