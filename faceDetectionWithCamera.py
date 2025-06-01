@@ -48,7 +48,7 @@ class CameraManager:
         # اتصال به دیتابیس MySQL با استفاده از متغیرهای محیطی
         try:
             self.db = mysql.connector.connect(
-                host=os.environ.get('MYSQL_HOST', '89.34.230.199'),
+                host=os.environ.get('MYSQL_HOST', '46.34.163.76'),
                 database=os.environ.get('MYSQL_DATABASE', 'mydatabase'),
                 user=os.environ.get('MYSQL_USER', 'user'),
                 password=os.environ.get('MYSQL_PASSWORD', 'userpassword')
@@ -61,7 +61,7 @@ class CameraManager:
         # اتصال به Redis با تنظیمات سرور مرکزی
         try:
             self.redis_db = redis.StrictRedis(
-                host=os.environ.get('REDIS_HOST', '89.34.230.199'),
+                host=os.environ.get('REDIS_HOST', '46.34.163.76'),
                 port=int(os.environ.get('REDIS_PORT', 6379)),
                 db=0,
                 password=os.environ.get('REDIS_PASSWORD', ''),
