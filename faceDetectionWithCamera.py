@@ -48,7 +48,7 @@ class CameraManager:
         # اتصال به دیتابیس MySQL با استفاده از متغیرهای محیطی
         try:
             self.db = mysql.connector.connect(
-                host=os.environ.get('MYSQL_HOST', '46.34.163.76'),
+                host=os.environ.get('MYSQL_HOST', '89.42.199.190'),
                 database=os.environ.get('MYSQL_DATABASE', 'mydatabase'),
                 user=os.environ.get('MYSQL_USER', 'user'),
                 password=os.environ.get('MYSQL_PASSWORD', 'userpassword')
