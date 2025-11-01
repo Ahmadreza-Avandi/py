@@ -61,7 +61,7 @@ class CameraManager:
         # اتصال به Redis با تنظیمات سرور مرکزی
         try:
             self.redis_db = redis.StrictRedis(
-                host=os.environ.get('REDIS_HOST', '46.34.163.76'),
+                host=os.environ.get('REDIS_HOST', '92.114.51.55'),
                 port=int(os.environ.get('REDIS_PORT', 6379)),
                 db=0,
                 password=os.environ.get('REDIS_PASSWORD', ''),
